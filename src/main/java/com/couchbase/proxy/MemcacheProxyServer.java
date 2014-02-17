@@ -49,7 +49,7 @@ public class MemcacheProxyServer {
                         @Override
                         public void initChannel(SocketChannel sc) throws Exception {
                             sc.pipeline()
-                                .addLast(new LoggingHandler(LogLevel.INFO))
+                                //.addLast(new LoggingHandler(LogLevel.INFO))
                                 .addLast(new BinaryMemcacheServerCodec())
                                 .addLast(new BinaryMemcacheObjectAggregator(AbstractBinaryMemcacheDecoder.DEFAULT_MAX_CHUNK_SIZE))
                                 .addLast(new MemcacheProxyHandler(couchbaseClient));

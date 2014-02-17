@@ -11,16 +11,22 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequestHeader;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseHeader;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
+import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponseHeader;
 import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.util.CharsetUtil;
+import net.spy.memcached.CachedData;
+import net.spy.memcached.transcoders.SerializingTranscoder;
+import net.spy.memcached.transcoders.Transcoder;
 
 public class MemcacheProxyHandler extends ChannelHandlerAdapter {
 
     private final CouchbaseClient client;
+    private final Transcoder transcoder;
 
     public MemcacheProxyHandler(CouchbaseClient client) {
         this.client = client;
+        transcoder = new PassthroughTranscoder();
     }
 
     @Override
@@ -43,41 +49,37 @@ public class MemcacheProxyHandler extends ChannelHandlerAdapter {
 
     private void handleGet(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
         BinaryMemcacheRequestHeader requestHeader = request.getHeader();
-
         String key = request.getKey();
 
-        Object couchbaseResponse = client.get(key);
-        if (couchbaseResponse == null) {
-            // TODO: send a ENOENT here back, since the doc was not found in couchbase
-        }
-
-        ByteBuf content = encodeResponseContent(couchbaseResponse);
-        ByteBuf extras = flagsForObject(couchbaseResponse);
-
         BinaryMemcacheResponseHeader responseHeader = new DefaultBinaryMemcacheResponseHeader();
-        responseHeader.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
         responseHeader.setOpcode(BinaryMemcacheOpcodes.GET);
-        responseHeader.setKeyLength(requestHeader.getKeyLength());
         responseHeader.setOpaque(requestHeader.getOpaque());
-        responseHeader.setExtrasLength((byte) extras.readableBytes());
-        responseHeader.setTotalBodyLength(content.readableBytes() + extras.readableBytes());
 
-        BinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(responseHeader, "",
-            extras, content);
-        ctx.writeAndFlush(response);
-    }
-
-    private ByteBuf encodeResponseContent(Object input) {
-        // Needs to be fixed with a nice transcoder depending on the object input.
-        return Unpooled.copiedBuffer("Hello World", CharsetUtil.UTF_8);
-    }
-
-    private ByteBuf flagsForObject(Object response) {
-        if (response instanceof String) {
-            return  Unpooled.buffer().writeInt(0); // 0 flag == string
+        CachedData couchbaseResponse = (CachedData) client.get(key, transcoder);
+        if (couchbaseResponse == null) {
+            responseHeader.setStatus(BinaryMemcacheResponseStatus.KEY_ENOENT);
+            ctx.writeAndFlush(
+                new DefaultBinaryMemcacheResponse(responseHeader)
+            );
         } else {
-            throw new IllegalStateException("Got Couchbase response I don't know the flags of: "
-                + response.getClass().getSimpleName());
+            ByteBuf content = Unpooled.copiedBuffer(couchbaseResponse.getData());
+            ByteBuf extras = Unpooled.buffer().writeInt(couchbaseResponse.getFlags());
+
+            responseHeader.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+            responseHeader.setExtrasLength((byte) extras.readableBytes());
+            responseHeader.setTotalBodyLength(content.readableBytes() + extras.readableBytes());
+
+            ctx.writeAndFlush(
+                new DefaultFullBinaryMemcacheResponse(responseHeader, "",extras, content)
+            );
+        }
+    }
+
+
+    static class PassthroughTranscoder extends SerializingTranscoder {
+        @Override
+        public Object decode(CachedData d) {
+            return d;
         }
     }
 }

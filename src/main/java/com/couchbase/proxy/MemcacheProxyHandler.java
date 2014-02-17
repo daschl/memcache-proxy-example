@@ -15,11 +15,17 @@ import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponseHeader;
 import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.util.CharsetUtil;
+import io.netty.util.ReferenceCountUtil;
+import io.netty.util.ResourceLeakDetector;
 import net.spy.memcached.CachedData;
 import net.spy.memcached.transcoders.SerializingTranscoder;
 import net.spy.memcached.transcoders.Transcoder;
 
 public class MemcacheProxyHandler extends ChannelHandlerAdapter {
+
+    static {
+        ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID);
+    }
 
     private final CouchbaseClient client;
     private final Transcoder transcoder;
@@ -42,6 +48,8 @@ public class MemcacheProxyHandler extends ChannelHandlerAdapter {
                     throw new IllegalStateException("Got a opcode I don't understand: "
                             + request.getHeader().getOpcode());
             }
+
+           ReferenceCountUtil.release(msg);
         } else {
             throw new IllegalStateException("Got a message I don't understand: " + msg);
         }
@@ -70,7 +78,7 @@ public class MemcacheProxyHandler extends ChannelHandlerAdapter {
             responseHeader.setTotalBodyLength(content.readableBytes() + extras.readableBytes());
 
             ctx.writeAndFlush(
-                new DefaultFullBinaryMemcacheResponse(responseHeader, "",extras, content)
+                new DefaultFullBinaryMemcacheResponse(responseHeader, "", extras, content)
             );
         }
     }

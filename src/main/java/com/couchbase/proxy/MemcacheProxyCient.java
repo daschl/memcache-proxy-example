@@ -13,8 +13,11 @@ public class MemcacheProxyCient {
         ConnectionFactory cf = new BinaryConnectionFactory();
         MemcachedClient client = new MemcachedClient(cf, Arrays.asList(new InetSocketAddress(11212)));
 
-        client.get("key");
+        // run some .gets here...
+        while(true) {
+            client.get("key");
+        }
 
-        client.shutdown();
+        //client.shutdown();
     }
 }

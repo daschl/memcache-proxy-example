@@ -11,8 +11,6 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.memcache.binary.AbstractBinaryMemcacheDecoder;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheObjectAggregator;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheServerCodec;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -49,7 +47,6 @@ public class MemcacheProxyServer {
                         @Override
                         public void initChannel(SocketChannel sc) throws Exception {
                             sc.pipeline()
-                                //.addLast(new LoggingHandler(LogLevel.INFO))
                                 .addLast(new BinaryMemcacheServerCodec())
                                 .addLast(new BinaryMemcacheObjectAggregator(AbstractBinaryMemcacheDecoder.DEFAULT_MAX_CHUNK_SIZE))
                                 .addLast(new MemcacheProxyHandler(couchbaseClient));

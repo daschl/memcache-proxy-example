@@ -23,10 +23,6 @@ import net.spy.memcached.transcoders.Transcoder;
 
 public class MemcacheProxyHandler extends ChannelHandlerAdapter {
 
-    static {
-        ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID);
-    }
-
     private final CouchbaseClient client;
     private final Transcoder transcoder;
 

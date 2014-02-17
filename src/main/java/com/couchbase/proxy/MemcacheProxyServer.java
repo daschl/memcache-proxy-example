@@ -11,6 +11,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.memcache.binary.AbstractBinaryMemcacheDecoder;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheObjectAggregator;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheServerCodec;
+import io.netty.util.ResourceLeakDetector;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -18,6 +19,11 @@ import java.net.URI;
 import java.util.Arrays;
 
 public class MemcacheProxyServer {
+
+    // set to PARANOID just for unit testing, otherwise keep it at SIMPLE.
+    static {
+        ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.SIMPLE);
+    }
 
     private final int port;
     private final CouchbaseClient couchbaseClient;

@@ -15,7 +15,7 @@ public class MemcacheProxyCient {
 
         // run some .gets here...
         while(true) {
-            client.get("key");
+			client.get("key");
         }
 
         //client.shutdown();

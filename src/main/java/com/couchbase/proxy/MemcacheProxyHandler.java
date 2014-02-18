@@ -18,6 +18,8 @@ import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ResourceLeakDetector;
 import net.spy.memcached.CachedData;
+import net.spy.memcached.internal.GetCompletionListener;
+import net.spy.memcached.internal.GetFuture;
 import net.spy.memcached.transcoders.SerializingTranscoder;
 import net.spy.memcached.transcoders.Transcoder;
 
@@ -51,32 +53,38 @@ public class MemcacheProxyHandler extends ChannelHandlerAdapter {
         }
     }
 
-    private void handleGet(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+    private void handleGet(final ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
         BinaryMemcacheRequestHeader requestHeader = request.getHeader();
         String key = request.getKey();
 
-        BinaryMemcacheResponseHeader responseHeader = new DefaultBinaryMemcacheResponseHeader();
+        final BinaryMemcacheResponseHeader responseHeader = new DefaultBinaryMemcacheResponseHeader();
         responseHeader.setOpcode(BinaryMemcacheOpcodes.GET);
         responseHeader.setOpaque(requestHeader.getOpaque());
 
-        CachedData couchbaseResponse = (CachedData) client.get(key, transcoder);
-        if (couchbaseResponse == null) {
-            responseHeader.setStatus(BinaryMemcacheResponseStatus.KEY_ENOENT);
-            ctx.writeAndFlush(
-                new DefaultBinaryMemcacheResponse(responseHeader)
-            );
-        } else {
-            ByteBuf content = Unpooled.copiedBuffer(couchbaseResponse.getData());
-            ByteBuf extras = Unpooled.buffer().writeInt(couchbaseResponse.getFlags());
 
-            responseHeader.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-            responseHeader.setExtrasLength((byte) extras.readableBytes());
-            responseHeader.setTotalBodyLength(content.readableBytes() + extras.readableBytes());
+		client.asyncGet(key, transcoder).addListener(new GetCompletionListener() {
+			@Override
+			public void onComplete(GetFuture<?> future) throws Exception {
+				CachedData couchbaseResponse = (CachedData) future.get();
+				if (couchbaseResponse == null || couchbaseResponse.getData() == null) {
+					ctx.writeAndFlush(
+						new DefaultBinaryMemcacheResponse(responseHeader)
+					);
+				} else {
+					ByteBuf content = Unpooled.copiedBuffer(couchbaseResponse.getData());
+					ByteBuf extras = Unpooled.buffer().writeInt(couchbaseResponse.getFlags());
 
-            ctx.writeAndFlush(
-                new DefaultFullBinaryMemcacheResponse(responseHeader, "", extras, content)
-            );
-        }
+					responseHeader
+						.setStatus(BinaryMemcacheResponseStatus.SUCCESS)
+						.setExtrasLength((byte) extras.readableBytes())
+						.setTotalBodyLength(content.readableBytes() + extras.readableBytes());
+
+					ctx.writeAndFlush(
+						new DefaultFullBinaryMemcacheResponse(responseHeader, "", extras, content)
+					);
+				}
+			}
+		});
     }
 
 
